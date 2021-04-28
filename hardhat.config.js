@@ -38,7 +38,8 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: 'https://bsc-dataseed.binance.org'
+        url: 'https://bsc-dataseed.binance.org',
+        method: "hardhat_reset",
       },
       allowUnlimitedContractSize: true
     },

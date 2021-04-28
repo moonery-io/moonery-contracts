@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: Unlicensed
+//SPDX-License-Identifier: MIT
 
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
@@ -156,9 +156,9 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(to != address(0), "Moonery: cannot recover to zero address");
         require(to != address(this), "Moonery: cannot recover to zero address");
-        require(newToken_ != IERC20(0), "Moonery: token cannot be zero address");
-        require(newToken_ != IERC20(this), "Moonery: cannot redeem $MNRY");
-        require(newToken_ != IERC20(pancakePair()), "Moonery: cannot redeem $LP");
+        require(address(newToken_) != address(0), "Moonery: token cannot be zero address");
+        require(address(newToken_) != address(this), "Moonery: cannot redeem $MNRY");
+        require(address(newToken_) != address(pancakePair()), "Moonery: cannot redeem $LP");
         newToken_.safeTransfer(to, amount);
     }
 
