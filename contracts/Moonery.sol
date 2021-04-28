@@ -3,6 +3,7 @@
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
+import "@openzeppelin/contracts3/access/AccessControl.sol";
 import "@openzeppelin/contracts3/utils/Address.sol";
 import "@openzeppelin/contracts3/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts3/token/ERC20/SafeERC20.sol";
@@ -15,7 +16,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 import "./Utils.sol";
 
-contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
+contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
     using SafeMath for uint256;
     using Address for address;
     using SafeERC20 for IERC20;
@@ -115,6 +116,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
         _isExcludedFromMaxTx[address(0x000000000000000000000000000000000000dEaD)] = true;
         _isExcludedFromMaxTx[address(0)] = true;
 
+        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+
         emit Transfer(address(0), _msgSender(), _tTotal);
     }
 
@@ -149,7 +152,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * @param amount Number of tokens to be emitted
      * @param to address Recipient of the recovered tokens
     */
-    function fallbackRedeem(IERC20 newToken_, uint256 amount,  address payable to) external onlyOwner {
+    function fallbackRedeem(IERC20 newToken_, uint256 amount,  address payable to) external {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(to != address(0), "Moonery: cannot recover to zero address");
         require(to != address(this), "Moonery: cannot recover to zero address");
         require(newToken_ != IERC20(0), "Moonery: token cannot be zero address");
@@ -168,7 +172,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `account` cannot be the zero address.
      * - `account` cannot already included.
      */
-    function includeInReward(address account) external onlyOwner {
+    function includeInReward(address account) external {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(account != address(0), "Moonery: account cannot be zero address");
         require(isExcludedFromReward(account), "Moonery: account is already included");
         for (uint256 i = 0; i < _excluded.length; i++) {
@@ -192,7 +197,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `account` cannot be the zero address.
      * - `account` cannot already excluded.
      */
-    function excludeFromReward(address account) public onlyOwner {
+    function excludeFromReward(address account) public {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(account != address(0), "Moonery: account cannot be zero address");
         require(!isExcludedFromReward(account), "Moonery: account is already excluded");
         if (_rOwned[account] > 0) {
@@ -211,7 +217,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `msg_sender` sender must be an admin.
      * - `taxFee_` cannot be the same value.
      */
-    function setTaxFeePercent(uint256 taxFee_) external onlyOwner() returns (bool) {
+    function setTaxFeePercent(uint256 taxFee_) external returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(taxFee_ != _taxFee, "Moonery: taxFee_ cannot be the same value");
         _taxFee = taxFee_;
 
@@ -227,7 +234,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `msg_sender` sender must be an admin.
      * - `liquidityFee_` cannot be the same value.
      */
-    function setLiquidityFeePercent(uint256 liquidityFee_) external onlyOwner returns (bool) {
+    function setLiquidityFeePercent(uint256 liquidityFee_) external returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(liquidityFee_ != _liquidityFee, "Moonery: liquidityFee_ cannot be the same value");
         _liquidityFee = liquidityFee_;
 
@@ -243,7 +251,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `msg_sender` sender must be an admin.
      * - `account` cannot be the zero address.
      */
-    function setExcludeFromMaxTx(address account, bool value_) external onlyOwner  returns (bool) {
+    function setExcludeFromMaxTx(address account, bool value_) external returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(account != address(0), "Moonery: account cannot be zero address");
         _isExcludedFromMaxTx[account] = value_;
 
@@ -260,7 +269,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `account` cannot be the zero address.
      * - `account` had not been already excluded.
      */
-    function excludeFromFee(address account) public onlyOwner returns (bool) {
+    function excludeFromFee(address account) public returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(account != address(0), "Moonery: account cannot be zero address");
         require(isExcludedFromFee(account), "Moonery: account is already excluded");
         _isExcludedFromFee[account] = true;
@@ -278,7 +288,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `account` cannot be the zero address.
      * - `account` had not been already included.
      */
-    function includeInFee(address account) public onlyOwner {
+    function includeInFee(address account) public {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(account != address(0), "Moonery: account cannot be zero address");
         require(!isExcludedFromFee(account), "Moonery: account is already included");
         _isExcludedFromFee[account] = false;
@@ -294,7 +305,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `lottery_` sender cannot be zero.
      * - `lottery_` cannot be the same value.
      */
-    function setLottery(address payable lottery_) external onlyOwner returns (bool) {
+    function setLottery(address payable lottery_) external returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(lottery_ != _lottery, "Moonery: lottery_ cannot be the same value");
         require(lottery_ != address(0), "Moonery: lottery_ cannot be zero address");
         _lottery = lottery_;
@@ -313,7 +325,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      * - `crowdsale_` sender cannot be zero.
      * - `crowdsale_` cannot be the same value.
      */
-    function setCrowdsale(address payable crowdsale_) external onlyOwner returns (bool) {
+    function setCrowdsale(address payable crowdsale_) external returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         require(crowdsale_ != _crowdsale, "Moonery: crowdsale_ cannot be the same value");
         require(crowdsale_ != address(0), "Moonery: crowdsale_ cannot be zero address");
         _crowdsale = crowdsale_;
@@ -322,7 +335,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
         return true; 
     }
 
-    function activateContract() external onlyOwner {
+    function activateContract() external {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         // reward claim
         disableEasyRewardFrom = block.timestamp + 1 weeks;
         rewardCycleBlock = 7 days;
@@ -340,7 +354,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
         _approve(address(this), address(pancakeRouter), 2 ** 256 - 1);
     }
 
-    function activateTestNet() external onlyOwner {
+    function activateTestNet() external {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         // reward claim
         disableEasyRewardFrom = block.timestamp;
         rewardCycleBlock = 30 minutes;
@@ -563,7 +578,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
      *
      * - `msg_sender` sender must be an admin.
      */
-    function setMaxTxPercent(uint256 maxTxPercent_) public onlyOwner returns (bool) {
+    function setMaxTxPercent(uint256 maxTxPercent_) public returns (bool) {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         _maxTxAmount = _tTotal.mul(maxTxPercent_).div(10000);
         return true;
     }
@@ -603,7 +619,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
         return true;
     }
 
-     function setSwapAndLiquifyEnabled(bool _enabled) public onlyOwner {
+     function setSwapAndLiquifyEnabled(bool _enabled) public {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         swapAndLiquifyEnabled = _enabled;
         emit SwapAndLiquifyEnabledUpdated(_enabled);
     }
@@ -861,7 +878,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard, Utils {
             _isExcludedFromMaxTx[to] == false // default will be false
         ) {
             if (value < disruptiveCoverageFee && block.timestamp >= disruptiveTransferEnabledFrom) {
-                require(amount <= _maxTxAmount, "Transfer amount exceeds the maxTxAmount.");
+                require(amount <= _maxTxAmount, "Moonery: transfer amount exceeds the maxTxAmount.");
             }
         }
     }

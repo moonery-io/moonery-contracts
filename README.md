@@ -120,8 +120,6 @@ truffle run verify BEP20Token@{deployed-address} --network binance_testnet
 
 ```
 
-```
-
 ## Security
 
 If you find a security issue, please join our Discord

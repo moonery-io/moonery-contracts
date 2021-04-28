@@ -92,7 +92,7 @@ contract('Moonery', function (accounts) {
     describe('excludeFromReward', function () {
       it('should revert when account is not admin', async function () {
         await expectRevert(this.token.excludeFromReward(recipient, { from: anotherAccount }),
-          'Ownable: caller is not the owner',
+          'Moonery: caller is not admin',
         );
       });
 
@@ -110,7 +110,7 @@ contract('Moonery', function (accounts) {
     describe('includeInReward', function () {
       it('should revert when account is not admin', async function () {
         await expectRevert(this.token.includeInReward(recipient, { from: anotherAccount }),
-          'Ownable: caller is not the owner',
+          'Moonery: caller is not admin',
         );
       });
 
@@ -133,7 +133,7 @@ contract('Moonery', function (accounts) {
     describe('includeInFee', function () {
       it('should revert when account is not admin', async function () {
         await expectRevert(this.token.includeInFee(recipient, { from: anotherAccount }),
-          'Ownable: caller is not the owner',
+          'Moonery: caller is not admin',
         );
       });
 
@@ -164,7 +164,7 @@ contract('Moonery', function (accounts) {
     describe('excludeFromFee', function () {
       it('should revert when account is not admin', async function () {
         await expectRevert(this.token.excludeFromFee(recipient, { from: anotherAccount }),
-          'Ownable: caller is not the owner',
+          'Moonery: caller is not admin',
         );
       });
 
@@ -192,7 +192,7 @@ contract('Moonery', function (accounts) {
     describe('setExcludeFromMaxTx', function () {
       it('should revert when account is not admin', async function () {
         await expectRevert(this.token.setExcludeFromMaxTx(recipient, true, { from: anotherAccount }),
-          'Ownable: caller is not the owner',
+          'Moonery: caller is not admin',
         );
       });
 
@@ -217,7 +217,7 @@ contract('Moonery', function (accounts) {
   describe('setTaxFeePercent', function () {
     it('should revert when account is not admin', async function () {
       await expectRevert(this.token.setTaxFeePercent(taxFee, { from: anotherAccount }),
-        'Ownable: caller is not the owner',
+        'Moonery: caller is not admin',
       );
     });
     it('should revert when taxfee has same value', async function () {
@@ -234,13 +234,10 @@ contract('Moonery', function (accounts) {
   describe('setMaxTxPercent', function () {
     it('should revert when account is not admin', async function () {
       await expectRevert(this.token.setMaxTxPercent(taxFee, { from: anotherAccount }),
-        'Ownable: caller is not the owner',
+        'Moonery: caller is not admin',
       );
     });
   });
-
-  
-  /*
 
   it('should exclude from max transaction', async function () {
     expect(await this.token.isExcludedFromMaxTx(this.token.address)).to.be.equal(true);
@@ -257,7 +254,7 @@ contract('Moonery', function (accounts) {
   context('activate', async function () {
     it('reverts when sender not admin', async function () {
       await expectRevert(this.token.activateContract({ from: anotherAccount }),
-        'Moonery: sender is not admin',
+        'Moonery: caller is not admin',
       );
     });
 
@@ -287,11 +284,11 @@ contract('Moonery', function (accounts) {
   
       describe('whale protection', function () {
         it('spender sent maxTrxAmount', async function () {
-          expect(await this.token.maxTxAmount()).to.be.bignumber.equal(maxTrxAmount);
+          //expect(await this.token.maxTxAmount()).to.be.bignumber.equal(maxTrxAmount);
           expect(await this.token.isExcludedFromMaxTx(recipient)).to.be.equal(false);
           expect(await this.token.isExcludedFromMaxTx(anotherAccount)).to.be.equal(false);
           expect(await this.token.isExcludedFromFee(recipient)).to.be.equal(false);
-          await expectRevert(this.token.transfer( recipient, maxTrxAmount+1, { from: anotherAccount }), 'Moonery: Transfer amount exceeds the maxTxAmount.');
+          await expectRevert(this.token.transfer( recipient, maxTrxAmount+1, { from: anotherAccount }), 'Moonery: transfer amount exceeds the maxTxAmount.');
         });
       });
 
@@ -319,7 +316,6 @@ contract('Moonery', function (accounts) {
       });
     });
   });
-  */
- 
+
   shouldBehaveLikeERC20('ERC20', initialSupply, initialHolder, recipient, anotherAccount);
 });
