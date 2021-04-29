@@ -4,7 +4,7 @@ pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
 
-import "@openzeppelin/contracts3/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title SimpleToken

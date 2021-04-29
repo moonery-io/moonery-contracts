@@ -10,6 +10,8 @@ require('@nomiclabs/hardhat-truffle5');
 require('@nomiclabs/hardhat-solhint');
 require('solidity-coverage');
 require('@nomiclabs/hardhat-waffle');
+require('@nomiclabs/hardhat-ethers');
+require("@nomiclabs/hardhat-etherscan");
 
 for (const f of fs.readdirSync(path.join(__dirname, 'hardhat'))) {
   require(path.join(__dirname, 'hardhat', f));
@@ -31,6 +33,7 @@ module.exports = {
     ],
     settings: {
       optimizer: {
+        enabled: true,
         runs: 200,
       },
     },
@@ -49,14 +52,15 @@ module.exports = {
         "mnemonic": mnemonic,
       },
       allowUnlimitedContractSize: true,
-      gasPrice: 8000000
+      gas: "auto"
     }
   },
   paths: {
     sources: "./contracts",
     tests: "./test",
     cache: "./cache",
-    artifacts: "./artifacts"
+    artifacts: "./artifacts",
+    buildinfo: "./artifacts/build-info"
   },
   etherscan: {
     apiKey: bscApiKey

@@ -3,11 +3,11 @@
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts3/utils/Context.sol";
-import "@openzeppelin/contracts3/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts3/math/SafeMath.sol";
-import "@openzeppelin/contracts3/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts3/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title Crowdsale
@@ -79,7 +79,7 @@ contract Crowdsale is Context, ReentrancyGuard {
     // (there is no other function except the receive function).
     // Any call with non-empty calldata to this contract will execute
     // the fallback function (even if Ether is sent along with the call).
-    fallback() external {
+    fallback() external payable {
         buyTokens(_msgSender());
     }
 

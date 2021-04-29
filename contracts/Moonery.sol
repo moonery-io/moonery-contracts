@@ -1,25 +1,23 @@
-//SPDX-License-Identifier: MIT
+//SPDX-License-Identifier: Unlicensed
 
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts3/access/AccessControl.sol";
-import "@openzeppelin/contracts3/utils/Address.sol";
-import "@openzeppelin/contracts3/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts3/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts3/access/Ownable.sol";
-import "@openzeppelin/contracts3/utils/ReentrancyGuard.sol";
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
+import "./utils/Address.sol";
+import "./utils/MooneryUtils.sol";
+import "./access/Ownable.sol";
 
-import "./Utils.sol";
-
-contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
+contract Moonery is IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
-    using SafeERC20 for IERC20;
 
     mapping(address => uint256) private _rOwned;
     mapping(address => uint256) private _tOwned;
@@ -31,9 +29,9 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
 
     address[] private _excluded;
 
-    uint256 private constant MAX = ~uint256(0);
+    uint256 private constant _MAX = ~uint256(0);
     uint256 private _tTotal = 1000000000 * 10 ** 6 * 10 ** 9;
-    uint256 private _rTotal = (MAX - (MAX % _tTotal));
+    uint256 private _rTotal = (_MAX - (_MAX % _tTotal));
     uint256 private _tFeeTotal;
 
     string private _name = "Moonery";
@@ -41,33 +39,12 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
     uint8 private _decimals = 9;
 
     IUniswapV2Router02 public immutable pancakeRouter;
-    address private immutable _pancakePair;
+    address public immutable pancakePair;
 
     address payable private _lottery;
     address payable private _crowdsale;
 
-    bool inSwapAndLiquify = false;
-
-    // Innovation for protocol by MoonRat Team
-    uint256 public rewardCycleBlock = 7 days;
-    uint256 public easyRewardCycleBlock = 1 days;
-    uint256 public threshHoldTopUpRate = 2; // 2 percent
-    uint256 public _maxTxAmount = _tTotal; // should be 0.05% percent per transaction, will be set again at activateContract() function
-    uint256 public disruptiveCoverageFee = 2 ether; // antiwhale
-    mapping(address => uint256) public nextAvailableClaimDate;
-    bool public swapAndLiquifyEnabled = false; // should be true
-    uint256 public disruptiveTransferEnabledFrom = 0;
-    uint256 public disableEasyRewardFrom = 0;
-    uint256 public winningDoubleRewardPercentage = 5;
-
-    uint256 public _taxFee = 2;
-    uint256 private _previousTaxFee = _taxFee;
-
-    uint256 public _liquidityFee = 8; // 4% will be added pool, 4% will be converted to BNB
-    uint256 private _previousLiquidityFee = _liquidityFee;
-    uint256 public rewardThreshold = 1 ether;
-
-    uint256 minTokenNumberToSell = _tTotal.mul(1).div(10000).div(10); // 0.001% max tx amount will trigger swap and add liquidity
+    bool private _inSwapAndLiquify = false;
 
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
@@ -83,28 +60,28 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
     );
 
     modifier lockTheSwap {
-        inSwapAndLiquify = true;
+        _inSwapAndLiquify = true;
         _;
-        inSwapAndLiquify = false;
+        _inSwapAndLiquify = false;
     }
 
     modifier isHuman() {
-        require(tx.origin == msg.sender, "Moonery: only humans");
+        require(tx.origin == msg.sender, "sorry humans only");
         _;
     }
 
     constructor (
-        address payable routerAddress_
+        address payable routerAddress
     ) public {
         _rOwned[_msgSender()] = _rTotal;
 
-        IUniswapV2Router02 pancakeRouter_ = IUniswapV2Router02(routerAddress_);
+        IUniswapV2Router02 _pancakeRouter = IUniswapV2Router02(routerAddress);
         // Create a pancake pair for this new token
-        _pancakePair = IUniswapV2Factory(pancakeRouter_.factory())
-        .createPair(address(this), pancakeRouter_.WETH());
+        pancakePair = IUniswapV2Factory(_pancakeRouter.factory())
+        .createPair(address(this), _pancakeRouter.WETH());
 
         // set the rest of the contract variables
-        pancakeRouter = pancakeRouter_;
+        pancakeRouter = _pancakeRouter;
 
         //exclude owner and this contract from fee
         _isExcludedFromFee[owner()] = true;
@@ -116,66 +93,25 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         _isExcludedFromMaxTx[address(0x000000000000000000000000000000000000dEaD)] = true;
         _isExcludedFromMaxTx[address(0)] = true;
 
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-
         emit Transfer(address(0), _msgSender(), _tTotal);
     }
 
     //to receive BNB from pancakeRouter when swapping
-    // This function is called for plain Ether transfers, i.e.
-    // for every call with empty calldata.
     receive() external payable {}
-
-    // This function is called for all messages sent to
-    // this contract, except plain Ether transfers
-    // (there is no other function except the receive function).
-    // Any call with non-empty calldata to this contract will execute
-    // the fallback function (even if Ether is sent along with the call).
-    fallback() external {}
+    fallback() external payable {}
 
     // External functions
-
-    /**
-     * @dev Faalback Redeem tokens. The ability to redeem token whe okenst are accidentally sent to the contract
-    *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `to` cannot be zero address.
-      * - `to` cannot be this address.
-     * - `newToken_` be zero address.
-     * - `newToken_` cannot redeem $MNRY.
-     * - `newToken_` cannot redeem pancakePair.
-     *
-     * @param newToken_ Address of the token
-     * @param amount Number of tokens to be emitted
-     * @param to address Recipient of the recovered tokens
-    */
-    function fallbackRedeem(IERC20 newToken_, uint256 amount,  address payable to) external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(to != address(0), "Moonery: cannot recover to zero address");
-        require(to != address(this), "Moonery: cannot recover to zero address");
-        require(address(newToken_) != address(0), "Moonery: token cannot be zero address");
-        require(address(newToken_) != address(this), "Moonery: cannot redeem $MNRY");
-        require(address(newToken_) != address(pancakePair()), "Moonery: cannot redeem $LP");
-        newToken_.safeTransfer(to, amount);
+    function excludeFromReward(address account) external onlyOwner {
+        require(!_isExcluded[account], "Account is already excluded");
+        if (_rOwned[account] > 0) {
+            _tOwned[account] = tokenFromReflection(_rOwned[account]);
+        }
+        _isExcluded[account] = true;
+        _excluded.push(account);
     }
 
-    /**
-     * @dev include an account in reward
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `account` cannot be the zero address.
-     * - `account` cannot already included.
-     */
-    function includeInReward(address account) external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(account != address(0), "Moonery: account cannot be zero address");
-        require(isExcludedFromReward(account), "Moonery: account is already included");
+    function includeInReward(address account) external onlyOwner {
+        require(_isExcluded[account], "Account is already excluded");
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
@@ -187,156 +123,27 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         }
     }
 
-    /**
-     * @dev exclude an account from reward
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `account` cannot be the zero address.
-     * - `account` cannot already excluded.
-     */
-    function excludeFromReward(address account) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(account != address(0), "Moonery: account cannot be zero address");
-        require(!isExcludedFromReward(account), "Moonery: account is already excluded");
-        if (_rOwned[account] > 0) {
-            _tOwned[account] = tokenFromReflection(_rOwned[account]);
-        }
-        _isExcluded[account] = true;
-        _excluded.push(account);
+    function setTaxFeePercent(uint256 taxFee) external onlyOwner() {
+        taxFee_ = taxFee;
     }
 
-    /**
-     * @dev set tax fee precentage
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `taxFee_` cannot be the same value.
-     */
-    function setTaxFeePercent(uint256 taxFee_) external returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(taxFee_ != _taxFee, "Moonery: taxFee_ cannot be the same value");
-        _taxFee = taxFee_;
-
-        return true;
+    function setLiquidityFeePercent(uint256 liquidityFee) external onlyOwner {
+        liquidityFee_ = liquidityFee;
     }
 
-    /**
-     * @dev set liquidity fee precentage
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `liquidityFee_` cannot be the same value.
-     */
-    function setLiquidityFeePercent(uint256 liquidityFee_) external returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(liquidityFee_ != _liquidityFee, "Moonery: liquidityFee_ cannot be the same value");
-        _liquidityFee = liquidityFee_;
-
-        return true;
+    function setExcludeFromMaxTx(address _address, bool value) external onlyOwner {
+        _isExcludedFromMaxTx[_address] = value;
     }
 
-    /**
-     * @dev set excluded address from maximum precentage
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `account` cannot be the zero address.
-     */
-    function setExcludeFromMaxTx(address account, bool value_) external returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(account != address(0), "Moonery: account cannot be zero address");
-        _isExcludedFromMaxTx[account] = value_;
-
-        return true;
+    function isExcludedFromFee(address account, bool value) external onlyOwner {
+        _isExcludedFromFee[account] = value;
     }
 
-    /**
-     * @dev set include address from fee
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `account` cannot be the zero address.
-     * - `account` had not been already excluded.
-     */
-    function excludeFromFee(address account) public returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(account != address(0), "Moonery: account cannot be zero address");
-        require(isExcludedFromFee(account), "Moonery: account is already excluded");
-        _isExcludedFromFee[account] = true;
-
-        return true;
-    }
-
-    /**
-     * @dev set include address in fee
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `account` cannot be the zero address.
-     * - `account` had not been already included.
-     */
-    function includeInFee(address account) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(account != address(0), "Moonery: account cannot be zero address");
-        require(!isExcludedFromFee(account), "Moonery: account is already included");
-        _isExcludedFromFee[account] = false;
-    }
-
-    /**
-     * @dev set lottery
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `lottery_` sender cannot be zero.
-     * - `lottery_` cannot be the same value.
-     */
-    function setLottery(address payable lottery_) external returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(lottery_ != _lottery, "Moonery: lottery_ cannot be the same value");
-        require(lottery_ != address(0), "Moonery: lottery_ cannot be zero address");
+    function activateContract(address payable lottery_, address payable crowdsale_) external onlyOwner {
+        // lottery and crowdsale
         _lottery = lottery_;
-        _isExcludedFromFee[lottery_] = true;
-        _isExcludedFromMaxTx[lottery_] = true;   
-        return true;
-    }
-
-    /**
-     * @dev set crowdsale
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     * - `crowdsale_` sender cannot be zero.
-     * - `crowdsale_` cannot be the same value.
-     */
-    function setCrowdsale(address payable crowdsale_) external returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        require(crowdsale_ != _crowdsale, "Moonery: crowdsale_ cannot be the same value");
-        require(crowdsale_ != address(0), "Moonery: crowdsale_ cannot be zero address");
         _crowdsale = crowdsale_;
-        _isExcludedFromFee[crowdsale_] = true;
-        _isExcludedFromMaxTx[crowdsale_] = true;  
-        return true; 
-    }
 
-    function activateContract() external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
         // reward claim
         disableEasyRewardFrom = block.timestamp + 1 weeks;
         rewardCycleBlock = 7 days;
@@ -354,238 +161,69 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         _approve(address(this), address(pancakeRouter), 2 ** 256 - 1);
     }
 
-    function activateTestNet() external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        // reward claim
-        disableEasyRewardFrom = block.timestamp;
-        rewardCycleBlock = 30 minutes;
-        easyRewardCycleBlock = 30 minutes;
-
-        winningDoubleRewardPercentage = 5;
-
-        // protocol
-        disruptiveCoverageFee = 2 ether;
-        disruptiveTransferEnabledFrom = block.timestamp;
-        setMaxTxPercent(1);
-        setSwapAndLiquifyEnabled(true);
-
-        // approve contract
-        _approve(address(this), address(pancakeRouter), 2 ** 256 - 1);
-    }
-
-
-
-    // External functions that are view
-    // ...
-
-    // External functions that are pure
-    // ...
-
     // Public ERC20 functions
-    
-    /**
-     * @dev Returns the name of the token.
-     */
     function name() public view returns (string memory) {
         return _name;
     }
 
-    /**
-     * @dev Returns the symbol of the token, usually a shorter version of the
-     * name.
-     */
     function symbol() public view returns (string memory) {
         return _symbol;
     }
 
-    /**
-     * @dev Returns the number of decimals used to get its user representation.
-     * For example, if `decimals` equals `2`, a balance of `505` tokens should
-     * be displayed to a user as `5,05` (`505 / 10 ** 2`).
-     *
-     * Tokens usually opt for a value of 18, imitating the relationship between
-     * Ether and Wei. This is the value {ERC20} uses, unless this function is
-     * overloaded;
-     *
-     * NOTE: This information is only used for _display_ purposes: it in
-     * no way affects any of the arithmetic of the contract, including
-     * {IERC20-balanceOf} and {IERC20-transfer}.
-     */
     function decimals() public view returns (uint8) {
         return _decimals;
     }
 
-    /**
-     * @dev See {IERC20-totalSupply}.
-     */
     function totalSupply() public view override returns (uint256) {
         return _tTotal;
     }
 
-    /**
-     * @dev See {IERC20-balanceOf}.
-     */
     function balanceOf(address account) public view override returns (uint256) {
-        if (isExcludedFromReward(account)) return _tOwned[account];
+        if (_isExcluded[account]) return _tOwned[account];
         return tokenFromReflection(_rOwned[account]);
     }
 
-    /**
-     * @dev See {IERC20-transfer}.
-     *
-     * Requirements:
-     *
-     * - `recipient` cannot be the zero address.
-     * - the caller must have a balance of at least `amount`.
-     */
     function transfer(address recipient, uint256 amount) public override returns (bool) {
         _transfer(_msgSender(), recipient, amount, 0);
         return true;
     }
 
-    /**
-     * @dev See {IERC20-allowance}.
-     */
-    function allowance(address owner, address spender) public view override returns (uint256) {
-        return _allowances[owner][spender];
+    function allowance(address owner_, address spender) public view override returns (uint256) {
+        return _allowances[owner_][spender];
     }
 
-    /**
-     * @dev See {IERC20-approve}.
-     *
-     * Requirements:
-     *
-     * - `spender` cannot be the zero address.
-     */
     function approve(address spender, uint256 amount) public override returns (bool) {
         _approve(_msgSender(), spender, amount);
         return true;
     }
 
-    /**
-     * @dev See {IERC20-transferFrom}.
-     *
-     * Emits an {Approval} event indicating the updated allowance. This is not
-     * required by the EIP. See the note at the beginning of {ERC20}.
-     *
-     * Requirements:
-     *
-     * - `sender` and `recipient` cannot be the zero address.
-     * - `sender` must have a balance of at least `amount`.
-     * - the caller must have allowance for ``sender``'s tokens of at least
-     * `amount`.
-     */
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
         _transfer(sender, recipient, amount, 0);
-        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "ERC20: transfer amount exceeds allowance"));
+        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "BEP20: transfer amount exceeds allowance"));
         return true;
     }
 
-    /**
-     * @dev Atomically increases the allowance granted to `spender` by the caller.
-     *
-     * This is an alternative to {approve} that can be used as a mitigation for
-     * problems described in {IERC20-approve}.
-     *
-     * Emits an {Approval} event indicating the updated allowance.
-     *
-     * Requirements:
-     *
-     * - `spender` cannot be the zero address.
-     */
     function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
         _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
         return true;
     }
 
-    /**
-     * @dev Atomically decreases the allowance granted to `spender` by the caller.
-     *
-     * This is an alternative to {approve} that can be used as a mitigation for
-     * problems described in {IERC20-approve}.
-     *
-     * Emits an {Approval} event indicating the updated allowance.
-     *
-     * Requirements:
-     *
-     * - `spender` cannot be the zero address.
-     * - `spender` must have allowance for the caller of at least
-     * `subtractedValue`.
-     */
     function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "ERC20: decreased allowance below zero"));
+        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "BEP20: decreased allowance below zero"));
         return true;
     }
 
     // Public Moonery functions
-
-    /**
-     * @dev Returns the address of the LP token (pancakePair)
-     */
-    function pancakePair() public view returns (address) {
-        return _pancakePair;
-    }
-
-    /**
-     * @dev Returns the address of lottery
-     */
     function lottery() public view returns (address) {
         return _lottery;
     }
 
-    
-    /**
-     * @dev Returns the address of crowdsale
-     */
     function crowdsale() public view returns (address) {
         return _crowdsale;
     }
 
-    /**
-     * @dev Returns taxfee
-     */
-     function taxFee() public view returns (uint256) {
-        return _taxFee;
-    }
-
-    /**
-     * @dev Returns the address included from fee
-     */
-    function isExcludedFromFee(address account_) public view returns (bool) {
-        return _isExcludedFromFee[account_];
-    }
-    
-
-    /**
-     * @dev Returns the address excluded from reward
-     */
-    function isExcludedFromReward(address account) public view returns (bool) {
-        return _isExcluded[account];
-    }
-
-    /**
-     * @dev Returns the address excluded from max trx
-     */
-    function isExcludedFromMaxTx(address account) public view returns (bool) {
-        return _isExcludedFromMaxTx[account];
-    }
-        
-    /**
-     * @dev set maximum transaction precentage
-     *
-     *
-     * Requirements:
-     *
-     * - `msg_sender` sender must be an admin.
-     */
-    function setMaxTxPercent(uint256 maxTxPercent_) public returns (bool) {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
-        _maxTxAmount = _tTotal.mul(maxTxPercent_).div(10000);
-        return true;
-    }
-
-    function totalFees() public view returns (uint256) {
-        return _tFeeTotal;
+    function setMaxTxPercent(uint256 maxTxPercent) public onlyOwner {
+        maxTxAmount_ = _tTotal.mul(maxTxPercent).div(10000);
     }
 
     function deliver(uint256 tAmount) public {
@@ -614,24 +252,59 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         return rAmount.div(currentRate);
     }
 
+    function claimBNBReward() isHuman nonReentrant public {
+        require(nextAvailableClaimDate[msg.sender] <= block.timestamp, "Error: next available not reached");
+        require(balanceOf(msg.sender) >= 0, "Error: must own MRAT to claim reward");
+
+        uint256 reward = calculateBNBReward(msg.sender);
+
+        // reward threshold
+        if (reward >= rewardThreshold) {
+            MooneryUtils.swapETHForTokens(
+                address(pancakeRouter),
+                address(0x000000000000000000000000000000000000dEaD),
+                reward.div(5)
+            );
+            reward = reward.sub(reward.div(5));
+        }
+
+        // update rewardCycleBlock
+        nextAvailableClaimDate[msg.sender] = block.timestamp + getRewardCycleBlock();
+        emit ClaimBNBSuccessfully(msg.sender, reward, nextAvailableClaimDate[msg.sender]);
+
+        (bool sent,) = address(msg.sender).call{value : reward}("");
+        require(sent, "Error: Cannot withdraw reward");
+    }
+
     function disruptiveTransfer(address recipient, uint256 amount) public payable returns (bool) {
         _transfer(_msgSender(), recipient, amount, msg.value);
         return true;
     }
 
-     function setSwapAndLiquifyEnabled(bool _enabled) public {
-        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Moonery: caller is not admin");
+    function setSwapAndLiquifyEnabled(bool _enabled) public onlyOwner {
         swapAndLiquifyEnabled = _enabled;
         emit SwapAndLiquifyEnabledUpdated(_enabled);
     }
 
-    // Internal functions
-    // ...
+    // Public functions that are view
+    function isExcludedFromFee(address account) public view returns (bool) {
+        return _isExcludedFromFee[account];
+    }
+
+    function isExcludedFromReward(address account) public view returns (bool) {
+        return _isExcluded[account];
+    }
+
+    function totalFees() public view returns (uint256) {
+        return _tFeeTotal;
+    }
+
+    function getRewardCycleBlock() public view returns (uint256) {
+        if (block.timestamp >= disableEasyRewardFrom) return rewardCycleBlock;
+        return easyRewardCycleBlock;
+    }
 
     // Private functions
-    // ...
-
-
     function _transferBothExcluded(address sender, address recipient, uint256 tAmount) private {
         (uint256 rAmount, uint256 rTransferAmount, uint256 rFee, uint256 tTransferAmount, uint256 tFee, uint256 tLiquidity) = _getValues(tAmount);
         _tOwned[sender] = _tOwned[sender].sub(tAmount);
@@ -642,7 +315,6 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         _reflectFee(rFee, tFee);
         emit Transfer(sender, recipient, tTransferAmount);
     }
-
     function _reflectFee(uint256 rFee, uint256 tFee) private {
         _rTotal = _rTotal.sub(rFee);
         _tFeeTotal = _tFeeTotal.add(tFee);
@@ -695,38 +367,38 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
     }
 
     function _calculateTaxFee(uint256 _amount) private view returns (uint256) {
-        return _amount.mul(_taxFee).div(
+        return _amount.mul(taxFee_).div(
             10 ** 2
         );
     }
 
     function _calculateLiquidityFee(uint256 _amount) private view returns (uint256) {
-        return _amount.mul(_liquidityFee).div(
+        return _amount.mul(liquidityFee_).div(
             10 ** 2
         );
     }
 
     function _removeAllFee() private {
-        if (_taxFee == 0 && _liquidityFee == 0) return;
+        if (taxFee_ == 0 && liquidityFee_ == 0) return;
 
-        _previousTaxFee = _taxFee;
-        _previousLiquidityFee = _liquidityFee;
+        _previousTaxFee = taxFee_;
+        _previousLiquidityFee = liquidityFee_;
 
-        _taxFee = 0;
-        _liquidityFee = 0;
+        taxFee_ = 0;
+        liquidityFee_ = 0;
     }
 
-    function restoreAllFee() private {
-        _taxFee = _previousTaxFee;
-        _liquidityFee = _previousLiquidityFee;
+    function _restoreAllFee() private {
+        taxFee_ = _previousTaxFee;
+        liquidityFee_ = _previousLiquidityFee;
     }
 
-    function _approve(address owner, address spender, uint256 amount) private {
-        require(owner != address(0), "ERC20: approve from the zero address");
-        require(spender != address(0), "ERC20: approve to the zero address");
+    function _approve(address owner_, address spender, uint256 amount) private {
+        require(owner_ != address(0), "BEP20: approve from the zero address");
+        require(spender != address(0), "BEP20: approve to the zero address");
 
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
+        _allowances[owner_][spender] = amount;
+        emit Approval(owner_, spender, amount);
     }
 
     function _transfer(
@@ -735,9 +407,9 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         uint256 amount,
         uint256 value
     ) private {
-        require(from != address(0), "ERC20: transfer from the zero address");
-        require(to != address(0), "ERC20: transfer to the zero address");
-        require(amount > 0, "ERC20: transfer amount must be greater than zero");
+        require(from != address(0), "BEP20: transfer from the zero address");
+        require(to != address(0), "BEP20: transfer to the zero address");
+        require(amount > 0, "Transfer amount must be greater than zero");
 
         _ensureMaxTxAmount(from, to, amount, value);
 
@@ -777,7 +449,7 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         }
 
         if (!takeFee)
-            restoreAllFee();
+            _restoreAllFee();
     }
 
     function _transferStandard(address sender, address recipient, uint256 tAmount) private {
@@ -809,57 +481,47 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
+    // Innovation for protocol by MoonRat Team
+    uint256 public rewardCycleBlock = 7 days;
+    uint256 public easyRewardCycleBlock = 1 days;
+    uint256 public threshHoldTopUpRate = 2; // 2 percent
+    uint256 public maxTxAmount_ = _tTotal; // should be 0.05% percent per transaction, will be set again at activateContract() function
+    uint256 public disruptiveCoverageFee = 2 ether; // antiwhale
+    mapping(address => uint256) public nextAvailableClaimDate;
+    bool public swapAndLiquifyEnabled = false; // should be true
+    uint256 public disruptiveTransferEnabledFrom = 0;
+    uint256 public disableEasyRewardFrom = 0;
+    uint256 public winningDoubleRewardPercentage = 5;
+
+    uint256 public taxFee_ = 2;
+    uint256 private _previousTaxFee = taxFee_;
+
+    uint256 public liquidityFee_ = 8; // 4% will be added pool, 4% will be converted to BNB
+    uint256 private _previousLiquidityFee = liquidityFee_;
+    uint256 public rewardThreshold = 1 ether;
+
+    uint256 private _minTokenNumberToSell = _tTotal.mul(1).div(10000).div(10); // 0.001% max tx amount will trigger swap and add liquidity
+
     function calculateBNBReward(address ofAddress) public view returns (uint256) {
-        uint256 totalSupply = uint256(_tTotal)
+        uint256 totalSupply_ = uint256(_tTotal)
         .sub(balanceOf(address(0)))
         .sub(balanceOf(0x000000000000000000000000000000000000dEaD)) // exclude burned wallet
-        .sub(balanceOf(pancakePair()));
+        .sub(balanceOf(address(pancakePair)));
         // exclude liquidity wallet
 
-        return Utils.calculateBNBReward(
+        return MooneryUtils.calculateBNBReward(
             _tTotal,
             balanceOf(address(ofAddress)),
             address(this).balance,
-            winningDoubleRewardPercentage,
-            totalSupply,
-            ofAddress
+            totalSupply_
         );
-    }
-
-    function getRewardCycleBlock() public view returns (uint256) {
-        if (block.timestamp >= disableEasyRewardFrom) return rewardCycleBlock;
-        return easyRewardCycleBlock;
-    }
-
-    function claimBNBReward() isHuman nonReentrant public {
-        require(nextAvailableClaimDate[msg.sender] <= block.timestamp, 'Error: next available not reached');
-        require(balanceOf(msg.sender) >= 0, 'Error: must own MRAT to claim reward');
-
-        uint256 reward = calculateBNBReward(msg.sender);
-
-        // reward threshold
-        if (reward >= rewardThreshold) {
-            Utils.swapETHForTokens(
-                address(pancakeRouter),
-                address(0x000000000000000000000000000000000000dEaD),
-                reward.div(5)
-            );
-            reward = reward.sub(reward.div(5));
-        }
-
-        // update rewardCycleBlock
-        nextAvailableClaimDate[msg.sender] = block.timestamp + getRewardCycleBlock();
-        emit ClaimBNBSuccessfully(msg.sender, reward, nextAvailableClaimDate[msg.sender]);
-
-        (bool sent,) = address(msg.sender).call{value : reward}("");
-        require(sent, 'Error: Cannot withdraw reward');
     }
 
     function _topUpClaimCycleAfterTransfer(address recipient, uint256 amount) private {
         uint256 currentRecipientBalance = balanceOf(recipient);
         uint256 basedRewardCycleBlock = getRewardCycleBlock();
 
-        nextAvailableClaimDate[recipient] = nextAvailableClaimDate[recipient] + Utils.calculateTopUpClaim(
+        nextAvailableClaimDate[recipient] = nextAvailableClaimDate[recipient] + MooneryUtils.calculateTopUpClaim(
             currentRecipientBalance,
             basedRewardCycleBlock,
             threshHoldTopUpRate,
@@ -878,10 +540,11 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
             _isExcludedFromMaxTx[to] == false // default will be false
         ) {
             if (value < disruptiveCoverageFee && block.timestamp >= disruptiveTransferEnabledFrom) {
-                require(amount <= _maxTxAmount, "Moonery: transfer amount exceeds the maxTxAmount.");
+                require(amount <= maxTxAmount_, "Transfer amount exceeds the maxTxAmount.");
             }
         }
     }
+
     function _swapAndLiquify(address from, address to) private {
         // is the token balance of this contract address over the min number of
         // tokens that we need to initiate a swap + liquidity lock?
@@ -889,21 +552,21 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
         // also, don't swap & liquify if sender is pancake pair.
         uint256 contractTokenBalance = balanceOf(address(this));
 
-        if (contractTokenBalance >= _maxTxAmount) {
-            contractTokenBalance = _maxTxAmount;
+        if (contractTokenBalance >= maxTxAmount_) {
+            contractTokenBalance = maxTxAmount_;
         }
 
-        bool shouldSell = contractTokenBalance >= minTokenNumberToSell;
+        bool shouldSell = contractTokenBalance >= _minTokenNumberToSell;
 
         if (
-            !inSwapAndLiquify &&
+            !_inSwapAndLiquify &&
         shouldSell &&
-        from != pancakePair() &&
+        from != pancakePair &&
         swapAndLiquifyEnabled &&
-        !(from == address(this) && to == pancakePair()) // swap 1 time
+        !(from == address(this) && to == address(pancakePair)) // swap 1 time
         ) {
             // only sell for minTokenNumberToSell, decouple from _maxTxAmount
-            contractTokenBalance = minTokenNumberToSell;
+            contractTokenBalance = _minTokenNumberToSell;
 
             // add liquidity
             // split the contract balance into 3 pieces
@@ -916,7 +579,7 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
             uint256 initialBalance = address(this).balance;
 
             // now is to lock into staking pool
-            Utils.swapTokensForEth(address(pancakeRouter), tokenAmountToBeSwapped);
+            MooneryUtils.swapTokensForEth(address(pancakeRouter), tokenAmountToBeSwapped);
 
             // how much BNB did we just swap into?
 
@@ -929,7 +592,7 @@ contract Moonery is AccessControl, IERC20, Ownable, ReentrancyGuard, Utils {
             uint256 bnbToBeAddedToLiquidity = deltaBalance.div(3);
 
             // add liquidity to pancake
-            Utils.addLiquidity(address(pancakeRouter), owner(), otherPiece, bnbToBeAddedToLiquidity);
+            MooneryUtils.addLiquidity(address(pancakeRouter), owner(), otherPiece, bnbToBeAddedToLiquidity);
 
             emit SwapAndLiquify(piece, deltaBalance, otherPiece);
         }

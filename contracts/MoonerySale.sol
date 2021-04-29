@@ -3,10 +3,10 @@
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts3/access/AccessControl.sol";
-import "@openzeppelin/contracts3/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts3/utils/Pausable.sol";
-import "@openzeppelin/contracts3/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./crowdsale/TimedCrowdsale.sol";
 
 contract MoonerySale is AccessControl, TimedCrowdsale , Pausable {

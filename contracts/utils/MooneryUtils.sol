@@ -2,52 +2,23 @@
 
 pragma solidity >=0.6.8 <0.9.0;
 
-import "@openzeppelin/contracts3/math/SafeMath.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
-contract Utils {
+library MooneryUtils {
     using SafeMath for uint256;
-
-    function random(uint256 from, uint256 to, uint256 salty) private view returns (uint256) {
-        uint256 seed = uint256(
-            keccak256(
-                abi.encodePacked(
-                    block.timestamp + block.difficulty +
-                    ((uint256(keccak256(abi.encodePacked(block.coinbase)))) / (now)) +
-                    block.gaslimit +
-                    ((uint256(keccak256(abi.encodePacked(msg.sender)))) / (now)) +
-                    block.number +
-                    salty
-                )
-            )
-        );
-        return seed.mod(to - from) + from;
-    }
-
-    function isLotteryWon(uint256 salty, uint256 winningDoubleRewardPercentage) private view returns (bool) {
-        uint256 luckyNumber = random(0, 100, salty);
-        uint256 winPercentage = winningDoubleRewardPercentage;
-        return luckyNumber <= winPercentage;
-    }
 
     function calculateBNBReward(
         uint256 _tTotal,
         uint256 currentBalance,
         uint256 currentBNBPool,
-        uint256 winningDoubleRewardPercentage,
-        uint256 totalSupply,
-        address ofAddress
+        uint256 totalSupply
     ) public view returns (uint256) {
         uint256 bnbPool = currentBNBPool;
 
         // calculate reward to send
-        bool isLotteryWonOnClaim = isLotteryWon(currentBalance, winningDoubleRewardPercentage);
         uint256 multiplier = 100;
-
-        if (isLotteryWonOnClaim) {
-            multiplier = random(150, 200, currentBalance);
-        }
 
         // now calculate reward
         uint256 reward = bnbPool.mul(multiplier).mul(currentBalance).div(100).div(totalSupply);
