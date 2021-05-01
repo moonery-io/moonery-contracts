@@ -61,7 +61,8 @@ abstract contract IndividuallyCappedCrowdsale is AccessControl, Crowdsale {
   function _preValidatePurchase(address beneficiary, uint256 weiAmount) internal view override {
     super._preValidatePurchase(beneficiary, weiAmount);
     // solhint-disable-next-line max-line-length
-    require(_contributions[beneficiary].add(weiAmount) <= _caps[beneficiary], "IndividuallyCappedCrowdsale: beneficiary's cap exceeded");
+    require(getCap(beneficiary) > 0, "IndividuallyCappedCrowdsale: beneficiary does not have cap");
+    require(_contributions[beneficiary].add(weiAmount) <= _caps[beneficiary], "IndividuallyCappedCrowdsale: beneficiarys cap exceeded");
   }
 
   /**

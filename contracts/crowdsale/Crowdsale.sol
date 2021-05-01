@@ -111,10 +111,15 @@ contract Crowdsale is Context, ReentrancyGuard {
         return _weiRaised;
     }
 
+    function calculateTokenAmount(uint256 weiAmount) public view  returns (uint256) {
+        return _getTokenAmount(weiAmount);
+    }
+
+
     /**
      * @dev low level token purchase ***DO NOT OVERRIDE***
      * This function has a non-reentrancy guard, so it shouldn't be called by
-     * another `nonReentrant` function.
+     * another nonReentrant function.
      * @param beneficiary Recipient of the token purchase
      */
     function buyTokens(address beneficiary) public nonReentrant payable {
@@ -138,7 +143,7 @@ contract Crowdsale is Context, ReentrancyGuard {
 
     /**
      * @dev Validation of an incoming purchase. Use require statements to revert state when conditions are not met.
-     * Use `super` in contracts that inherit from Crowdsale to extend their validations.
+     * Use super in contracts that inherit from Crowdsale to extend their validations.
      * Example from CappedCrowdsale.sol's _preValidatePurchase method:
      *     super._preValidatePurchase(beneficiary, weiAmount);
      *     require(weiRaised().add(weiAmount) <= cap);
@@ -167,7 +172,7 @@ contract Crowdsale is Context, ReentrancyGuard {
      * @param beneficiary Address performing the token purchase
      * @param tokenAmount Number of tokens to be emitted
      */
-    function _deliverTokens(address beneficiary, uint256 tokenAmount) internal {
+    function _deliverTokens(address beneficiary, uint256 tokenAmount) internal virtual {
         _token.safeTransfer(beneficiary, tokenAmount);
     }
 
