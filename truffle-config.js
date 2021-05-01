@@ -25,11 +25,17 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-      version: '0.6.8'
+      version: '0.6.8',
     }
   },
 
   db: {
     enabled: false
+  },
+  plugins: [
+    'truffle-plugin-verify',
+  ],
+  api_keys: {
+    bscscan: bscApiKey
   }
 };

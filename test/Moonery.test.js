@@ -7,11 +7,7 @@ const { ZERO_ADDRESS } = constants;
 const  { abi, bytecode } = require('@uniswap/v2-periphery/build/UniswapV2Router02.json');
 //const { UniswapV2Router02 } = require('@uniswap/v2-periphery/contracts/UniswapV2Router02.sol');
 
-const {
-  shouldBehaveLikeERC20,
-  shouldBehaveLikeERC20Transfer,
-  shouldBehaveLikeERC20Approve,
-} = require('./behaviors/ERC20.behavior');
+const { shouldBehaveLikeERC20 } = require('./behaviors/ERC20.behavior');
 const ether = require('@openzeppelin/test-helpers/src/ether');
 
 const Moonery = artifacts.require('Moonery');
@@ -22,7 +18,7 @@ const overrides = {
 }
 
 contract('Moonery', function (accounts) {
-  const [ initialHolder, recipient, anotherAccount, ...otherAccounts ] = accounts;
+  const [ initialHolder, recipient, anotherAccount, crowdsale, ...otherAccounts ] = accounts;
 
   const name = 'Moonery';
   const symbol = 'MNRY';
@@ -44,8 +40,6 @@ contract('Moonery', function (accounts) {
   beforeEach(async function () {
     this.token = await Moonery.new(routerV2, {  from: initialHolder });
     this.tokenAddress = await this.token.address;
-    await this.token.setLottery(lottery, {  from: initialHolder });
-    //await this.token.setMoonerySale();
     //this.contract = await UniswapV2Router02.at(routerV2);
     //this.contract = await factory.attach(routerV2);
     //await this.token.approve(routerV2, amountToPancakeSwap, { from: initialHolder });
@@ -271,6 +265,16 @@ contract('Moonery', function (accounts) {
 
     it('reward should disable for 1 weak', async function () {
       expect(await this.token.disableEasyRewardFrom()).to.be.bignumber.equal(this.openingTime);
+    });
+    context('claimBNBReward', async function () {
+      beforeEach(async function () {
+        const { logs } = await lottery.sendTransaction({ value: value, from: this.initialHolder });
+      });
+
+      it('has bnb reward', async function () {
+        await this.token.transfer( lottery, maxTrxAmount, { from: initialHolder });
+        console.log('calculateBNBReward=>' +await this.token.calculateBNBReward(lottery));
+      });
     });
 
     context('transfer', async function () {

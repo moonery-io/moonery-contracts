@@ -1,5 +1,10 @@
 const Moonery = artifacts.require('Moonery');
+const Utils = artifacts.require('Utils');
 module.exports = function (deployer, network, accounts) {
+
+  //deploy Library
+  deployer.deploy(Utils);
+  deployer.link(Utils, Moonery);
   let router;
   if (network === 'development') {
     router = '0x10ED43C718714eb63d5aA57B78B54704E256024E';

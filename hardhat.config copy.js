@@ -11,7 +11,7 @@ require('@nomiclabs/hardhat-solhint');
 require('solidity-coverage');
 require('@nomiclabs/hardhat-waffle');
 require('@nomiclabs/hardhat-ethers');
-require("@nomiclabs/hardhat-etherscan");
+//require("@nomiclabs/hardhat-etherscan");
 
 for (const f of fs.readdirSync(path.join(__dirname, 'hardhat'))) {
   require(path.join(__dirname, 'hardhat', f));

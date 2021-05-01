@@ -116,7 +116,9 @@ truffle migrate --network testnet
 3. Verify your contract
 
 ```
-truffle run verify BEP20Token@{deployed-address} --network binance_testnet
+npx hardhat verify --network testnet 0x34602183Bc6F93631a0e85EBFD50ECA0DC3CA668 "0xD99D1c33F9fC3444f8101754aBC46c52416550D1"
+
+truffle run verify Moonery@0x5EB91bE972486007908B5749e93fa1F4165B657c --network testnet
 
 ```
 
