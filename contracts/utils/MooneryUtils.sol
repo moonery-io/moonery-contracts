@@ -2,9 +2,8 @@
 
 pragma solidity >=0.6.8 <0.9.0;
 
-import "@openzeppelin/contracts/math/SafeMath.sol";
-
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 library MooneryUtils {
     using SafeMath for uint256;

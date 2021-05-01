@@ -13,18 +13,15 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
   // router testnet 0xD99D1c33F9fC3444f8101754aBC46c52416550D1
-  const routerV2 = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1';
+  //const WBNB = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; // TESTNET
+  const routerV2 = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'; // TESTNET
   //const routerDev = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
+  //const routerV2 = '0x10ED43C718714eb63d5aA57B78B54704E256024E'; //PancakeSwap: Router v2  Binance Mainnet
 
   const MooneryUtils = await hre.ethers.getContractFactory("MooneryUtils");
   const mooneryUtils = await MooneryUtils.deploy();
   await mooneryUtils.deployed();
   console.log("MooneryUtils deployed to:", mooneryUtils.address);
-
-  const MoonerySafeERC20 = await hre.ethers.getContractFactory("MoonerySafeERC20");
-  const moonerySafeERC20 = await MoonerySafeERC20.deploy();
-  await moonerySafeERC20.deployed();
-  console.log("MoonerySafeERC20 deployed to:", moonerySafeERC20.address);
 
   const Moonery = await hre.ethers.getContractFactory("Moonery", {
     libraries: {
@@ -36,7 +33,7 @@ async function main() {
   await moonery.deployed();
   console.log("Moonery deployed to:", moonery.address);
 
-  await hre.run("verify:verify", {
+  /*await hre.run("verify:verify", {
     address: moonery.address,
     constructorArguments: [
       routerV2
@@ -44,7 +41,7 @@ async function main() {
     libraries: {
       MooneryUtils: mooneryUtils.address,
     }
-  })
+  })*/
 }
 
 // We recommend this pattern to be able to use async/await everywhere

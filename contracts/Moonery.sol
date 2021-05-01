@@ -14,6 +14,8 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./utils/Address.sol";
 import "./utils/MooneryUtils.sol";
 import "./access/Ownable.sol";
+import "./IWBNB.sol";
+
 
 contract Moonery is IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
@@ -43,6 +45,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
 
     address payable private _lottery;
     address payable private _crowdsale;
+    address payable private _wbnb = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
 
     bool private _inSwapAndLiquify = false;
 
@@ -139,6 +142,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         _isExcludedFromFee[account] = value;
     }
 
+    /*
     function activateContract(address payable lottery_, address payable crowdsale_) external onlyOwner {
         // lottery and crowdsale
         _lottery = lottery_;
@@ -149,7 +153,25 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         rewardCycleBlock = 7 days;
         easyRewardCycleBlock = 1 days;
 
-        winningDoubleRewardPercentage = 5;
+        // protocol
+        disruptiveCoverageFee = 2 ether;
+        disruptiveTransferEnabledFrom = block.timestamp;
+        setMaxTxPercent(1);
+        setSwapAndLiquifyEnabled(true);
+
+        // approve contract
+        _approve(address(this), address(pancakeRouter), 2 ** 256 - 1);
+    }*/
+
+    function activateTestNet(address payable lottery_, address payable crowdsale_) public onlyOwner {
+        // lottery and crowdsale
+        _lottery = lottery_;
+        _crowdsale = crowdsale_;
+
+        // reward claim
+        disableEasyRewardFrom = block.timestamp;
+        rewardCycleBlock = 15 minutes;
+        easyRewardCycleBlock = 15 minutes;
 
         // protocol
         disruptiveCoverageFee = 2 ether;
@@ -214,14 +236,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     // Public Moonery functions
-    function lottery() public view returns (address) {
-        return _lottery;
-    }
-
-    function crowdsale() public view returns (address) {
-        return _crowdsale;
-    }
-
     function setMaxTxPercent(uint256 maxTxPercent) public onlyOwner {
         maxTxAmount_ = _tTotal.mul(maxTxPercent).div(10000);
     }
@@ -252,11 +266,19 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         return rAmount.div(currentRate);
     }
 
-    function claimBNBReward() isHuman nonReentrant public {
-        require(nextAvailableClaimDate[msg.sender] <= block.timestamp, "Error: next available not reached");
-        require(balanceOf(msg.sender) >= 0, "Error: must own MRAT to claim reward");
+    function claimBNBReward(bool forLottery_) isHuman nonReentrant public {
+        address payable receiver;
+        if(forLottery_) {
+            receiver = _lottery;
+        } else {
+            receiver = msg.sender;
+        }
 
-        uint256 reward = calculateBNBReward(msg.sender);
+        require(nextAvailableClaimDate[receiver] <= block.timestamp, "Error: next available not reached");
+        require(balanceOf(receiver) >= 0, "Error: must own $MNRY to claim reward");
+
+        
+        uint256 reward = calculateBNBReward(receiver);
 
         // reward threshold
         if (reward >= rewardThreshold) {
@@ -269,11 +291,17 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         }
 
         // update rewardCycleBlock
-        nextAvailableClaimDate[msg.sender] = block.timestamp + getRewardCycleBlock();
-        emit ClaimBNBSuccessfully(msg.sender, reward, nextAvailableClaimDate[msg.sender]);
+        nextAvailableClaimDate[receiver] = block.timestamp + getRewardCycleBlock();
+        emit ClaimBNBSuccessfully(receiver, reward, nextAvailableClaimDate[receiver]);
 
-        (bool sent,) = address(msg.sender).call{value : reward}("");
-        require(sent, "Error: Cannot withdraw reward");
+        //if lottery pool sent WBNB instead of BNB
+        if(forLottery_) {
+            IWBNB(_wbnb).deposit{ value: reward }();
+            reward = reward.mul(1 wei);
+            IWBNB(_wbnb).transfer(address(_lottery), reward);
+        } else {
+            _msgSender().transfer(reward);
+        }        
     }
 
     function disruptiveTransfer(address recipient, uint256 amount) public payable returns (bool) {
@@ -491,7 +519,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     bool public swapAndLiquifyEnabled = false; // should be true
     uint256 public disruptiveTransferEnabledFrom = 0;
     uint256 public disableEasyRewardFrom = 0;
-    uint256 public winningDoubleRewardPercentage = 5;
 
     uint256 public taxFee_ = 2;
     uint256 private _previousTaxFee = taxFee_;
