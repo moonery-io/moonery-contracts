@@ -142,7 +142,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         _isExcludedFromFee[account] = value;
     }
 
-    /*
+    
     function activateContract(address payable lottery_, address payable crowdsale_) external onlyOwner {
         // lottery and crowdsale
         _lottery = lottery_;
@@ -156,33 +156,13 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         // protocol
         disruptiveCoverageFee = 2 ether;
         disruptiveTransferEnabledFrom = block.timestamp;
-        setMaxTxPercent(1);
-        setSwapAndLiquifyEnabled(true);
-
-        // approve contract
-        _approve(address(this), address(pancakeRouter), 2 ** 256 - 1);
-    }*/
-
-    function activateTestNet(address payable lottery_, address payable crowdsale_) public onlyOwner {
-        // lottery and crowdsale
-        _lottery = lottery_;
-        _crowdsale = crowdsale_;
-
-        // reward claim
-        disableEasyRewardFrom = block.timestamp;
-        rewardCycleBlock = 15 minutes;
-        easyRewardCycleBlock = 15 minutes;
-
-        // protocol
-        disruptiveCoverageFee = 2 ether;
-        disruptiveTransferEnabledFrom = block.timestamp;
-        setMaxTxPercent(1);
+        setMaxTxPercent(5);
         setSwapAndLiquifyEnabled(true);
 
         // approve contract
         _approve(address(this), address(pancakeRouter), 2 ** 256 - 1);
     }
-
+    
     // Public ERC20 functions
     function name() public view returns (string memory) {
         return _name;

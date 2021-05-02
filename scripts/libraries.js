@@ -1,3 +1,3 @@
 module.exports = {
-  MooneryUtils: "0x93c72414d0e4D2913ee6733D55384d9d2eFE1B99"
+  MooneryUtils: "0x02Aa613305D18e985650008345883e53D0F38a0B"
 }

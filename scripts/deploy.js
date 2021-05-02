@@ -12,8 +12,8 @@ async function main() {
   // If this script is run directly using `node` you may want to call compile 
   // manually to make sure everything is compiled
   // await hre.run('compile');
-  const routerV2 = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'; // TESTNET
-  //const routerV2 = '0x10ED43C718714eb63d5aA57B78B54704E256024E'; //PancakeSwap: Router v2  Binance Mainnet
+  //const routerV2 = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'; // TESTNET
+  const routerV2 = '0x10ED43C718714eb63d5aA57B78B54704E256024E'; //PancakeSwap: Router v2  Binance Mainnet
 
 
   const rate = 61600;

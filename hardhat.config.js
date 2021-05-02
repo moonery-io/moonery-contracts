@@ -54,6 +54,15 @@ module.exports = {
       allowUnlimitedContractSize: true,
       gas: "auto"
     },
+    mainnet: {
+      url: 'https://bsc-dataseed.binance.org/',
+      "accounts": {
+        "mnemonic": mnemonic,
+      },
+      allowUnlimitedContractSize: true,
+      gas: "auto",
+      confirmations: 10,
+    },
     fork: {
       url: 'http://127.0.0.1:8546',
       "accounts": {
