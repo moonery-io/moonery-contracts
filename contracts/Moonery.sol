@@ -45,7 +45,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
 
     address payable private _lottery;
     address payable private _crowdsale;
-    address payable private _wbnb = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
+    address payable private _wbnb = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c; //MAINNET!
 
     bool private _inSwapAndLiquify = false;
 
