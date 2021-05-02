@@ -18,7 +18,7 @@
     "deploy:fork": "npx hardhat run --network fork scripts/deploy.js",
     "flattener": "truffle-flattener contracts/Moonery.sol > contracts/FlattenedMoonery.sol",
     "verify:testnet": "npx hardhat verify --libraries scripts/libraries.js  --constructor-args scripts/arguments.js --network testnet 0x9CB19eE44e5c4A6741492916cD397F9e8EfC9D2C",
-    "verify:mainnet": "npx hardhat verify --libraries scripts/libraries.js  --constructor-args scripts/aguments.js --network mainnet 0x4673262D2A734Ef06ffab55d85AfB3280f0452ff --show-stack-traces",
+    "verify:mainnet": "npx hardhat verify --libraries scripts/libraries.js  --constructor-args scripts/arguments.js --network mainnet 0x49363b69f7702a5C33F8F609A694122e2F219D20 --show-stack-traces",
     "verify:sale": "npx hardhat verify --constructor-args scripts/saleArguments.js --network mainnet 0x3D2c7f453cE841CfE8829178c76A54cAa21E3ec8",
     "migrate:testnet": "./node_modules/.bin/truffle migrate --network testnet",
     "gas-report": "env ENABLE_GAS_REPORT=true npm run test"
