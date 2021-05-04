@@ -63,6 +63,7 @@
     "ethers": "^5.1.0",
     "graphviz": "0.0.9",
     "hardhat": "^2.2.1",
+    "hardhat-contract-sizer": "^2.0.3",
     "hardhat-gas-reporter": "^1.0.4",
     "keccak256": "^1.0.2",
     "lodash.startcase": "^4.4.0",

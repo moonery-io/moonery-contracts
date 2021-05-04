@@ -3,23 +3,24 @@
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
-
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
-import "./utils/Address.sol";
 import "./utils/MooneryUtils.sol";
-import "./access/Ownable.sol";
 import "./IWBNB.sol";
 
 
 contract Moonery is IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
+    using SafeERC20 for IERC20;
 
     mapping(address => uint256) private _rOwned;
     mapping(address => uint256) private _tOwned;
@@ -32,33 +33,33 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     address[] private _excluded;
 
     uint256 private constant _MAX = ~uint256(0);
-    uint256 private _tTotal = 1000000000 * 10 ** 6 * 10 ** 9;
+    uint256 private constant _tTotal = 1000000000 * 10 ** 6 * 10 ** 9;
     uint256 private _rTotal = (_MAX - (_MAX % _tTotal));
     uint256 private _tFeeTotal;
 
-    string private _name = "Moonery";
-    string private _symbol = "MNRY";
-    uint8 private _decimals = 9;
+    string private constant _name = "Moonery";
+    string private constant _symbol = "MNRY";
+    uint8 private immutable _decimals = 9;
 
     IUniswapV2Router02 public immutable pancakeRouter;
     address public immutable pancakePair;
 
     address payable private _lottery;
     address payable private _crowdsale;
-    address payable private _wbnb = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c; //MAINNET!
+    address payable private immutable _wbnb;
 
     bool private _inSwapAndLiquify = false;
 
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
         uint256 tokensSwapped,
-        uint256 ethReceived,
-        uint256 tokensIntoLiqudity
+        uint256 bnbReceived,
+        uint256 tokensIntoLiquidity
     );
 
     event ClaimBNBSuccessfully(
         address recipient,
-        uint256 ethReceived,
+        uint256 bnbReceived,
         uint256 nextAvailableClaimDate
     );
 
@@ -74,7 +75,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     constructor (
-        address payable routerAddress
+        address payable routerAddress,
+        address payable wbnb_
     ) public {
         _rOwned[_msgSender()] = _rTotal;
 
@@ -85,6 +87,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
 
         // set the rest of the contract variables
         pancakeRouter = _pancakeRouter;
+        _wbnb = wbnb_;
 
         //exclude owner and this contract from fee
         _isExcludedFromFee[owner()] = true;
@@ -104,8 +107,15 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     fallback() external payable {}
 
     // External functions
+    function fallbackRedeem(IERC20 newToken_, uint256 tokenAmount_) external nonReentrant {
+        require(!_isExcluded[_msgSender()], "AC2");
+        require(address(newToken_) != address(this), "FB1");
+        require(address(newToken_) != address(pancakePair), "FB2");
+        newToken_.safeTransfer(address(_lottery), tokenAmount_);
+    }
+
     function excludeFromReward(address account) external onlyOwner {
-        require(!_isExcluded[account], "Account is already excluded");
+        require(!_isExcluded[account], "AC1");
         if (_rOwned[account] > 0) {
             _tOwned[account] = tokenFromReflection(_rOwned[account]);
         }
@@ -114,7 +124,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function includeInReward(address account) external onlyOwner {
-        require(_isExcluded[account], "Account is already excluded");
+        require(_isExcluded[account], "AC1");
         for (uint256 i = 0; i < _excluded.length; i++) {
             if (_excluded[i] == account) {
                 _excluded[i] = _excluded[_excluded.length - 1];
@@ -142,7 +152,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         _isExcludedFromFee[account] = value;
     }
 
-    
     function activateContract(address payable lottery_, address payable crowdsale_) external onlyOwner {
         // lottery and crowdsale
         _lottery = lottery_;
@@ -201,7 +210,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
         _transfer(sender, recipient, amount, 0);
-        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "BEP20: transfer amount exceeds allowance"));
+        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "BEP1"));
         return true;
     }
 
@@ -211,7 +220,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "BEP20: decreased allowance below zero"));
+        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "BEP2"));
         return true;
     }
 
@@ -221,8 +230,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function deliver(uint256 tAmount) public {
+        require(!_isExcluded[_msgSender()], "AC2");
         address sender = _msgSender();
-        require(!_isExcluded[sender], "Excluded addresses cannot call this function");
         (uint256 rAmount,,,,,) = _getValues(tAmount);
         _rOwned[sender] = _rOwned[sender].sub(rAmount);
         _rTotal = _rTotal.sub(rAmount);
@@ -230,7 +239,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function reflectionFromToken(uint256 tAmount, bool deductTransferFee) public view returns (uint256) {
-        require(tAmount <= _tTotal, "Amount must be less than supply");
+        require(tAmount <= _tTotal, "RFT1");
         if (!deductTransferFee) {
             (uint256 rAmount,,,,,) = _getValues(tAmount);
             return rAmount;
@@ -241,47 +250,19 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function tokenFromReflection(uint256 rAmount) public view returns (uint256) {
-        require(rAmount <= _rTotal, "Amount must be less than total reflections");
+        require(rAmount <= _rTotal, "TFR1");
         uint256 currentRate = _getRate();
         return rAmount.div(currentRate);
     }
 
-    function claimBNBReward(bool forLottery_) isHuman nonReentrant public {
-        address payable receiver;
-        if(forLottery_) {
-            receiver = _lottery;
-        } else {
-            receiver = msg.sender;
-        }
+    function claim() public {
+        require(!_isExcluded[_msgSender()], "AC2"); 
+        _claimBNBReward(msg.sender, true);
+    }
 
-        require(nextAvailableClaimDate[receiver] <= block.timestamp, "Error: next available not reached");
-        require(balanceOf(receiver) >= 0, "Error: must own $MNRY to claim reward");
 
-        
-        uint256 reward = calculateBNBReward(receiver);
-
-        // reward threshold
-        if (reward >= rewardThreshold) {
-            MooneryUtils.swapETHForTokens(
-                address(pancakeRouter),
-                address(0x000000000000000000000000000000000000dEaD),
-                reward.div(5)
-            );
-            reward = reward.sub(reward.div(5));
-        }
-
-        // update rewardCycleBlock
-        nextAvailableClaimDate[receiver] = block.timestamp + getRewardCycleBlock();
-        emit ClaimBNBSuccessfully(receiver, reward, nextAvailableClaimDate[receiver]);
-
-        //if lottery pool sent WBNB instead of BNB
-        if(forLottery_) {
-            IWBNB(_wbnb).deposit{ value: reward }();
-            reward = reward.mul(1 wei);
-            IWBNB(_wbnb).transfer(address(_lottery), reward);
-        } else {
-            _msgSender().transfer(reward);
-        }        
+    function claimBNBReward() isHuman nonReentrant public {
+        _claimBNBReward(msg.sender, false);
     }
 
     function disruptiveTransfer(address recipient, uint256 amount) public payable returns (bool) {
@@ -402,8 +383,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function _approve(address owner_, address spender, uint256 amount) private {
-        require(owner_ != address(0), "BEP20: approve from the zero address");
-        require(spender != address(0), "BEP20: approve to the zero address");
+        require(owner_ != address(0), "BEP3");
+        require(spender != address(0), "BEP4");
 
         _allowances[owner_][spender] = amount;
         emit Approval(owner_, spender, amount);
@@ -415,9 +396,9 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         uint256 amount,
         uint256 value
     ) private {
-        require(from != address(0), "BEP20: transfer from the zero address");
-        require(to != address(0), "BEP20: transfer to the zero address");
-        require(amount > 0, "Transfer amount must be greater than zero");
+        require(from != address(0), "BEP5");
+        require(to != address(0), "BEP6");
+        require(amount > 0, "BEP7");
 
         _ensureMaxTxAmount(from, to, amount, value);
 
@@ -448,8 +429,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
             _transferFromExcluded(sender, recipient, amount);
         } else if (!_isExcluded[sender] && _isExcluded[recipient]) {
             _transferToExcluded(sender, recipient, amount);
-        } else if (!_isExcluded[sender] && !_isExcluded[recipient]) {
-            _transferStandard(sender, recipient, amount);
         } else if (_isExcluded[sender] && _isExcluded[recipient]) {
             _transferBothExcluded(sender, recipient, amount);
         } else {
@@ -553,10 +532,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function _swapAndLiquify(address from, address to) private {
-        // is the token balance of this contract address over the min number of
-        // tokens that we need to initiate a swap + liquidity lock?
-        // also, don't get caught in a circular liquidity event.
-        // also, don't swap & liquify if sender is pancake pair.
         uint256 contractTokenBalance = balanceOf(address(this));
 
         if (contractTokenBalance >= maxTxAmount_) {
@@ -586,22 +561,54 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
             uint256 initialBalance = address(this).balance;
 
             // now is to lock into staking pool
-            MooneryUtils.swapTokensForEth(address(pancakeRouter), tokenAmountToBeSwapped);
+            MooneryUtils.swapTokensForBnb(address(pancakeRouter), tokenAmountToBeSwapped);
 
-            // how much BNB did we just swap into?
-
-            // capture the contract's current BNB balance.
-            // this is so that we can capture exactly the amount of BNB that the
-            // swap creates, and not make the liquidity event include any BNB that
-            // has been manually sent to the contract
             uint256 deltaBalance = address(this).balance.sub(initialBalance);
 
             uint256 bnbToBeAddedToLiquidity = deltaBalance.div(3);
 
             // add liquidity to pancake
-            MooneryUtils.addLiquidity(address(pancakeRouter), owner(), otherPiece, bnbToBeAddedToLiquidity);
+            MooneryUtils.addLiquidity(address(pancakeRouter), address(this), otherPiece, bnbToBeAddedToLiquidity);
 
             emit SwapAndLiquify(piece, deltaBalance, otherPiece);
         }
+    }
+
+    function _claimBNBReward(address payable sender, bool forLottery_) private {
+        address payable receiver;
+        if(forLottery_) {
+            receiver = _lottery;
+        } else {
+            receiver = sender;
+        }
+
+        require(nextAvailableClaimDate[receiver] <= block.timestamp, "CL1");
+        require(balanceOf(receiver) >= 0, "CL2");
+
+        
+        uint256 reward = calculateBNBReward(receiver);
+
+        // reward threshold
+        if (reward >= rewardThreshold) {
+            MooneryUtils.swapBNBForTokens(
+                address(pancakeRouter),
+                address(0x000000000000000000000000000000000000dEaD),
+                reward.div(5)
+            );
+            reward = reward.sub(reward.div(5));
+        }
+
+        // update rewardCycleBlock
+        nextAvailableClaimDate[receiver] = block.timestamp + getRewardCycleBlock();
+        emit ClaimBNBSuccessfully(receiver, reward, nextAvailableClaimDate[receiver]);
+
+        //if lottery pool sent WBNB instead of BNB
+        if(forLottery_) {
+            IWBNB(_wbnb).deposit{ value: reward }();
+            reward = reward.mul(1 wei);
+            IWBNB(_wbnb).transfer(address(_lottery), reward);
+        } else {
+            _msgSender().transfer(reward);
+        }        
     }
 }

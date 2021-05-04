@@ -2,10 +2,9 @@
 
 pragma solidity >=0.6.8 <0.9.0;
 
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
-
-import "../utils/Address.sol";
 
 /**
  * @dev Contract module that allows children to implement role-based access

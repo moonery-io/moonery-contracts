@@ -51,7 +51,7 @@ library MooneryUtils {
         }
     }
 
-    function swapTokensForEth(
+    function swapTokensForBnb(
         address routerAddress,
         uint256 tokenAmount
     ) public {
@@ -72,10 +72,10 @@ library MooneryUtils {
         );
     }
 
-    function swapETHForTokens(
+    function swapBNBForTokens(
         address routerAddress,
         address recipient,
-        uint256 ethAmount
+        uint256 bnbAmount
     ) public {
         IUniswapV2Router02 pancakeRouter = IUniswapV2Router02(routerAddress);
 
@@ -85,7 +85,7 @@ library MooneryUtils {
         path[1] = address(this);
 
         // make the swap
-        pancakeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens{value: ethAmount}(
+        pancakeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens{value: bnbAmount}(
             0, // accept any amount of BNB
             path,
             address(recipient),
@@ -97,12 +97,12 @@ library MooneryUtils {
         address routerAddress,
         address owner,
         uint256 tokenAmount,
-        uint256 ethAmount
-    ) public {
+        uint256 bnbAmount
+    ) public returns (uint amountToken, uint amountETH, uint liquidity) {
         IUniswapV2Router02 pancakeRouter = IUniswapV2Router02(routerAddress);
 
         // add the liquidity
-        pancakeRouter.addLiquidityETH{value : ethAmount}(
+        return pancakeRouter.addLiquidityETH{value : bnbAmount}(
             address(this),
             tokenAmount,
             0, // slippage is unavoidable
