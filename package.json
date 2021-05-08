@@ -14,6 +14,7 @@
     "test": "hardhat test",
     "deploy": "npx hardhat run scripts/deploy.js",
     "deploy:testnet": "npx hardhat run --network testnet scripts/deploy.js",
+    "deploy:escrow": "npx hardhat run --network testnet scripts/deploy_escrow.js",
     "deploy:mainnet": "npx hardhat run --network mainnet scripts/deploy.js",
     "deploy:fork": "npx hardhat run --network fork scripts/deploy.js",
     "flattener": "truffle-flattener contracts/Moonery.sol > contracts/FlattenedMoonery.sol",

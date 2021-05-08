@@ -10,7 +10,9 @@ const  { abi, bytecode } = require('@uniswap/v2-periphery/build/UniswapV2Router0
 const { shouldBehaveLikeERC20 } = require('./behaviors/ERC20.behavior');
 const ether = require('@openzeppelin/test-helpers/src/ether');
 
+const MooneryUtils = artifacts.require('MooneryUtils');
 const Moonery = artifacts.require('Moonery');
+
 //const UniswapV2Router02 = artifacts.require('UniswapV2Router02');
 
 const overrides = {
@@ -38,8 +40,16 @@ contract('Moonery', function (accounts) {
   
 
   beforeEach(async function () {
-    this.token = await Moonery.new(routerV2, {  from: initialHolder });
-    this.tokenAddress = await this.token.address;
+    this.utils = await MooneryUtils.new();
+    console.log(this.utils.address);
+    this.token = await Moonery.new(routerV2, {  
+      from: initialHolder,
+      libraries: {
+        MooneryUtils: this.utils.address
+      }
+     });
+    this.tokenAddress = this.token.address;
+    console.log( this.tokenAddress);
     //this.contract = await UniswapV2Router02.at(routerV2);
     //this.contract = await factory.attach(routerV2);
     //await this.token.approve(routerV2, amountToPancakeSwap, { from: initialHolder });
