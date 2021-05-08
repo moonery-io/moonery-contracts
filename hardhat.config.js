@@ -29,14 +29,12 @@ module.exports = {
   solidity: {
     compilers: [
       {
-        version: "0.6.8"
+        version: "0.6.9"
       }
     ],
-    settings: {
-      optimizer: {
+    optimizer: {
         enabled: true,
         runs: 2000,
-      },
     },
   },
   networks: {

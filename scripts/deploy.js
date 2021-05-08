@@ -40,6 +40,11 @@ async function main() {
   await moonerySale.deployed();
   console.log("MoonerySale deployed to:", moonerySale.address);
 
+  const MooneryEscrowTimeLock = await hre.ethers.getContractFactory("MooneryEscrowTimeLock");
+  const escrow = await MooneryEscrowTimeLock.deploy();
+  await escrow.deployed();
+  console.log("MooneryEscrowTimeLock deployed to:", escrow.address);
+
   await hre.run("verify:verify", {
     address: moonery.address,
     constructorArguments: [router, WBNB],
@@ -51,6 +56,11 @@ async function main() {
   await hre.run("verify:verify", {
     address: moonerySale.address,
     constructorArguments: [rate, capper, moonery.address, capper],
+  });
+
+  await hre.run("verify:verify", {
+    address: escrow.address,
+    constructorArguments: [],
   });
   
 }

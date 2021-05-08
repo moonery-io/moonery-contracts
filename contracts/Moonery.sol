@@ -3,7 +3,6 @@
 pragma solidity >=0.6.8 <0.9.0;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -50,6 +49,26 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
 
     bool private _inSwapAndLiquify = false;
 
+     // Innovation for protocol by MoonRat Team
+    uint256 public rewardCycleBlock = 7 days;
+    uint256 public easyRewardCycleBlock = 1 days;
+    uint256 public threshHoldTopUpRate = 2; // 2 percent
+    uint256 public maxTxAmount = _tTotal.mul(5).div(10000);
+    uint256 public disruptiveCoverageFee = 2 ether; // antiwhale
+    mapping(address => uint256) public nextAvailableClaimDate;
+    bool public swapAndLiquifyEnabled = false; // should be true
+    uint256 public disruptiveTransferEnabledFrom = block.timestamp;
+    uint256 public  disableEasyRewardFrom = block.timestamp + 1 weeks;
+
+    uint256 public taxFee = 2;
+    uint256 private _previousTaxFee = taxFee;
+
+    uint256 public liquidityFee = 8; // 4% will be added pool, 4% will be converted to BNB
+    uint256 private _previousLiquidityFee = liquidityFee;
+    uint256 public rewardThreshold = 1 ether;
+
+    uint256 private _minTokenNumberToSell = _tTotal.mul(1).div(10000).div(10); // 0.001% max tx amount will trigger swap and add liquidity
+
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
         uint256 tokensSwapped,
@@ -67,11 +86,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         _inSwapAndLiquify = true;
         _;
         _inSwapAndLiquify = false;
-    }
-
-    modifier isHuman() {
-        require(tx.origin == msg.sender, "sorry humans only");
-        _;
     }
 
     constructor (
@@ -136,12 +150,12 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         }
     }
 
-    function setTaxFeePercent(uint256 taxFee) external onlyOwner() {
-        taxFee_ = taxFee;
+    function setTaxFeePercent(uint256 taxFee_) external onlyOwner() {
+        taxFee = taxFee_;
     }
 
-    function setLiquidityFeePercent(uint256 liquidityFee) external onlyOwner {
-        liquidityFee_ = liquidityFee;
+    function setLiquidityFeePercent(uint256 liquidityFee_) external onlyOwner {
+        liquidityFee = liquidityFee_;
     }
 
     function setExcludeFromMaxTx(address _address, bool value) external onlyOwner {
@@ -157,15 +171,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         _lottery = lottery_;
         _crowdsale = crowdsale_;
 
-        // reward claim
-        disableEasyRewardFrom = block.timestamp + 1 weeks;
-        rewardCycleBlock = 7 days;
-        easyRewardCycleBlock = 1 days;
-
-        // protocol
-        disruptiveCoverageFee = 2 ether;
-        disruptiveTransferEnabledFrom = block.timestamp;
-        setMaxTxPercent(5);
         setSwapAndLiquifyEnabled(true);
 
         // approve contract
@@ -224,11 +229,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         return true;
     }
 
-    // Public Moonery functions
-    function setMaxTxPercent(uint256 maxTxPercent) public onlyOwner {
-        maxTxAmount_ = _tTotal.mul(maxTxPercent).div(10000);
-    }
-
     function deliver(uint256 tAmount) public {
         require(!_isExcluded[_msgSender()], "AC2");
         address sender = _msgSender();
@@ -261,7 +261,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
 
-    function claimBNBReward() isHuman nonReentrant public {
+    function claimBNBReward() nonReentrant public {
         _claimBNBReward(msg.sender, false);
     }
 
@@ -356,30 +356,30 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     }
 
     function _calculateTaxFee(uint256 _amount) private view returns (uint256) {
-        return _amount.mul(taxFee_).div(
+        return _amount.mul(taxFee).div(
             10 ** 2
         );
     }
 
     function _calculateLiquidityFee(uint256 _amount) private view returns (uint256) {
-        return _amount.mul(liquidityFee_).div(
+        return _amount.mul(liquidityFee).div(
             10 ** 2
         );
     }
 
     function _removeAllFee() private {
-        if (taxFee_ == 0 && liquidityFee_ == 0) return;
+        if (taxFee == 0 && liquidityFee == 0) return;
 
-        _previousTaxFee = taxFee_;
-        _previousLiquidityFee = liquidityFee_;
+        _previousTaxFee = taxFee;
+        _previousLiquidityFee = liquidityFee;
 
-        taxFee_ = 0;
-        liquidityFee_ = 0;
+        taxFee = 0;
+        liquidityFee = 0;
     }
 
     function _restoreAllFee() private {
-        taxFee_ = _previousTaxFee;
-        liquidityFee_ = _previousLiquidityFee;
+        taxFee = _previousTaxFee;
+        liquidityFee = _previousLiquidityFee;
     }
 
     function _approve(address owner_, address spender, uint256 amount) private {
@@ -409,10 +409,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         bool takeFee = true;
 
         //if any account belongs to _isExcludedFromFee account then remove the fee
-        if (_isExcludedFromFee[from] || _isExcludedFromFee[to]) {
-            takeFee = false;
-        }
-
+        if (_isExcludedFromFee[from] || _isExcludedFromFee[to]) takeFee = false;
+    
         //transfer amount, it will take tax, burn, liquidity fee
         _tokenTransfer(from, to, amount, takeFee);
     }
@@ -468,26 +466,6 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
-    // Innovation for protocol by MoonRat Team
-    uint256 public rewardCycleBlock = 7 days;
-    uint256 public easyRewardCycleBlock = 1 days;
-    uint256 public threshHoldTopUpRate = 2; // 2 percent
-    uint256 public maxTxAmount_ = _tTotal; // should be 0.05% percent per transaction, will be set again at activateContract() function
-    uint256 public disruptiveCoverageFee = 2 ether; // antiwhale
-    mapping(address => uint256) public nextAvailableClaimDate;
-    bool public swapAndLiquifyEnabled = false; // should be true
-    uint256 public disruptiveTransferEnabledFrom = 0;
-    uint256 public disableEasyRewardFrom = 0;
-
-    uint256 public taxFee_ = 2;
-    uint256 private _previousTaxFee = taxFee_;
-
-    uint256 public liquidityFee_ = 8; // 4% will be added pool, 4% will be converted to BNB
-    uint256 private _previousLiquidityFee = liquidityFee_;
-    uint256 public rewardThreshold = 1 ether;
-
-    uint256 private _minTokenNumberToSell = _tTotal.mul(1).div(10000).div(10); // 0.001% max tx amount will trigger swap and add liquidity
-
     function calculateBNBReward(address ofAddress) public view returns (uint256) {
         uint256 totalSupply_ = uint256(_tTotal)
         .sub(balanceOf(address(0)))
@@ -526,7 +504,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
             _isExcludedFromMaxTx[to] == false // default will be false
         ) {
             if (value < disruptiveCoverageFee && block.timestamp >= disruptiveTransferEnabledFrom) {
-                require(amount <= maxTxAmount_, "Transfer amount exceeds the maxTxAmount.");
+                require(amount <= maxTxAmount, "Transfer amount exceeds the maxTxAmount.");
             }
         }
     }
@@ -534,8 +512,8 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     function _swapAndLiquify(address from, address to) private {
         uint256 contractTokenBalance = balanceOf(address(this));
 
-        if (contractTokenBalance >= maxTxAmount_) {
-            contractTokenBalance = maxTxAmount_;
+        if (contractTokenBalance >= maxTxAmount) {
+            contractTokenBalance = maxTxAmount;
         }
 
         bool shouldSell = contractTokenBalance >= _minTokenNumberToSell;
@@ -583,7 +561,7 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         }
 
         require(nextAvailableClaimDate[receiver] <= block.timestamp, "CL1");
-        require(balanceOf(receiver) >= 0, "CL2");
+        require(balanceOf(receiver) > 0, "CL2");
 
         
         uint256 reward = calculateBNBReward(receiver);
