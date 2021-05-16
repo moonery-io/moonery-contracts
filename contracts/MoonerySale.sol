@@ -44,7 +44,6 @@ contract MoonerySale is IndividuallyCappedCrowdsale {
 
   function changeRate(uint256 rate_) external {
     require(hasRole(CAPPER_ROLE, _msgSender()), "MoonerySale: caller is not admin");
-    require(_rate == rate(), "MoonerySale: rate cannot be the same value");
     _rate = rate_;
   }
 

@@ -71,7 +71,6 @@ abstract contract IndividuallyCappedCrowdsale is AccessControl, Crowdsale {
     * @param weiAmount Amount of wei contributed
     */
   function _updatePurchasingState(address beneficiary, uint256 weiAmount) internal override {
-    super._updatePurchasingState(beneficiary, weiAmount);
     _contributions[beneficiary] = _contributions[beneficiary].add(weiAmount);
   }
 }

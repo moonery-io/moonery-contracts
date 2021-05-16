@@ -75,12 +75,12 @@ contract MooneryEscrowTimeLock is Escrow, ReentrancyGuard {
     return geUnlockTime() < block.timestamp;
   }
 
-  function withdraw(address payable payee) public virtual override onlyWhileOpen {
+  function withdraw(address payable payee) public virtual override nonReentrant onlyWhileOpen {
     require(payee != address(0), "MooneryEscrowTimeLock: withdraw to the zero address");
     super.withdraw(payee);
   }
 
-  function tokenWithdraw(IERC20 token, address payable payee) public virtual onlyWhileOpen {
+  function tokenWithdraw(IERC20 token, address payable payee) public virtual nonReentrant onlyWhileOpen {
     require(address(token) != address(0), "MooneryEscrowTimeLock: token adress is the zero address");
     require(payee != address(0), "MooneryEscrowTimeLock: withdraw to the zero address");
     uint256 payment = _tokenDeposits[address(token)][payee];
@@ -94,6 +94,8 @@ contract MooneryEscrowTimeLock is Escrow, ReentrancyGuard {
 
   //Locks the contract for owner for the amount of time provided
   function lock(uint256 unlocktime) public virtual onlyOwner {
+    require(unlocktime > block.timestamp, "MooneryEscrowTimeLock: unlocktime < than now");
+    require(unlocktime > _unlocktime, "MooneryEscrowTimeLock: unlocktime < than current unlocktime");
     _unlocktime = unlocktime;
   }
 

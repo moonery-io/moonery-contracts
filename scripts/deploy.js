@@ -11,14 +11,18 @@ async function main() {
   let router;
 
   if (network.name === "testnet" ) {
-    WBNB = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; // WBNB TESTNET
-    router = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'; // TESTNET
+    //WBNB = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; // WBNB TESTNET
+    //router = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'; // TESTNET
+    WBNB = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; //https://pancake.kiemtienonline360.com/
+    router = '0x9ac64cc6e4415144c455bd8e4837fea55603e5c3'; // https://pancake.kiemtienonline360.com/
+    //WBNB = '0xae13d989dac2f0debff460ac112a837c89baa7cd';// WBNB TESTNET
+    //router = '0xCDe540d7eAFE93aC5fE6233Bee57E1270D3E330F'; //BAKERY TESTNET
   } else {
     WBNB = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'; // WBNB MAINNET
     router = '0x10ED43C718714eb63d5aA57B78B54704E256024E'; //PancakeSwap: Router v2  Binance Mainnet
   }
 
-  const rate = 61600;
+  const rate = 57300;
   const capper = "0x5a30c6Cc080D0Cc246fAfb0C700b2EcA6eD2cF01";
 
   const MooneryUtils = await hre.ethers.getContractFactory("MooneryUtils");

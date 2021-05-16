@@ -15,7 +15,6 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./utils/MooneryUtils.sol";
 import "./IWBNB.sol";
 
-
 contract Moonery is IERC20, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using Address for address;
@@ -46,14 +45,15 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
     address payable private _lottery;
     address payable private _crowdsale;
     address payable private immutable _wbnb;
+    address payable private _escrow;
 
-    bool private _inSwapAndLiquify = false;
+    bool private _inSwapAndLiquify;
 
      // Innovation for protocol by MoonRat Team
-    uint256 public rewardCycleBlock = 7 days;
-    uint256 public easyRewardCycleBlock = 1 days;
+    uint256 public rewardCycleBlock = 15 minutes; //TEST
+    uint256 public easyRewardCycleBlock = 1 days; // TEST
     uint256 public threshHoldTopUpRate = 2; // 2 percent
-    uint256 public maxTxAmount = _tTotal.mul(5).div(10000);
+    uint256 public maxTxAmount = _tTotal;
     uint256 public disruptiveCoverageFee = 2 ether; // antiwhale
     mapping(address => uint256) public nextAvailableClaimDate;
     bool public swapAndLiquifyEnabled = false; // should be true
@@ -65,9 +65,9 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
 
     uint256 public liquidityFee = 8; // 4% will be added pool, 4% will be converted to BNB
     uint256 private _previousLiquidityFee = liquidityFee;
-    uint256 public rewardThreshold = 1 ether;
+    uint256 public rewardThreshold = 2 ether;
 
-    uint256 private _minTokenNumberToSell = _tTotal.mul(1).div(10000).div(10); // 0.001% max tx amount will trigger swap and add liquidity
+    uint256 private _minTokenNumberToSell = _tTotal.mul(1).div(10000); // 0.01% max tx amount will trigger swap and add liquidity
 
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
@@ -166,11 +166,13 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         _isExcludedFromFee[account] = value;
     }
 
-    function activateContract(address payable lottery_, address payable crowdsale_) external onlyOwner {
+    function activateContract(address payable lottery_, address payable crowdsale_, address payable escrow_) external onlyOwner {
         // lottery and crowdsale
         _lottery = lottery_;
         _crowdsale = crowdsale_;
+        _escrow = escrow_;
 
+        setMaxTxPercent(5); // 0.05% per transaction
         setSwapAndLiquifyEnabled(true);
 
         // approve contract
@@ -255,14 +257,20 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         return rAmount.div(currentRate);
     }
 
-    function claim() public {
+    function claim() public nonReentrant {
         require(!_isExcluded[_msgSender()], "AC2"); 
-        _claimBNBReward(msg.sender, true);
+        _claimBNBReward(_lottery);
     }
 
 
     function claimBNBReward() nonReentrant public {
-        _claimBNBReward(msg.sender, false);
+        _claimBNBReward(msg.sender);
+    }
+
+    function setMaxTxPercent(uint256 maxTxPercent) public onlyOwner {
+        maxTxAmount = _tTotal.mul(maxTxPercent).div(
+            10 ** 4
+        );
     }
 
     function disruptiveTransfer(address recipient, uint256 amount) public payable returns (bool) {
@@ -546,25 +554,18 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
             uint256 bnbToBeAddedToLiquidity = deltaBalance.div(3);
 
             // add liquidity to pancake
-            MooneryUtils.addLiquidity(address(pancakeRouter), address(this), otherPiece, bnbToBeAddedToLiquidity);
+            MooneryUtils.addLiquidity(address(pancakeRouter), address(_escrow), otherPiece, bnbToBeAddedToLiquidity);
 
             emit SwapAndLiquify(piece, deltaBalance, otherPiece);
         }
     }
 
-    function _claimBNBReward(address payable sender, bool forLottery_) private {
-        address payable receiver;
-        if(forLottery_) {
-            receiver = _lottery;
-        } else {
-            receiver = sender;
-        }
-
-        require(nextAvailableClaimDate[receiver] <= block.timestamp, "CL1");
-        require(balanceOf(receiver) > 0, "CL2");
+    function _claimBNBReward(address payable sender) private {
+        require(nextAvailableClaimDate[sender] <= block.timestamp, "CL1");
+        require(balanceOf(sender) > 0, "CL2");
 
         
-        uint256 reward = calculateBNBReward(receiver);
+        uint256 reward = calculateBNBReward(sender);
 
         // reward threshold
         if (reward >= rewardThreshold) {
@@ -577,11 +578,11 @@ contract Moonery is IERC20, Ownable, ReentrancyGuard {
         }
 
         // update rewardCycleBlock
-        nextAvailableClaimDate[receiver] = block.timestamp + getRewardCycleBlock();
-        emit ClaimBNBSuccessfully(receiver, reward, nextAvailableClaimDate[receiver]);
+        nextAvailableClaimDate[sender] = block.timestamp + getRewardCycleBlock();
+        emit ClaimBNBSuccessfully(sender, reward, nextAvailableClaimDate[sender]);
 
         //if lottery pool sent WBNB instead of BNB
-        if(forLottery_) {
+        if(address(sender) == address(_lottery)) {
             IWBNB(_wbnb).deposit{ value: reward }();
             reward = reward.mul(1 wei);
             IWBNB(_wbnb).transfer(address(_lottery), reward);
